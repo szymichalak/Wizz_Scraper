@@ -8,6 +8,7 @@ from pathlib import Path
 import locators.xpath
 from delayer.delayer import Delayer
 from extra_data.months import months
+from time_converter.time_converter import TimeConverter
 
 
 class Scraper:
@@ -19,6 +20,7 @@ class Scraper:
             driver_path = str(Path().absolute()) + "/scraper/chromedriver"
             self.browser = webdriver.Chrome(driver_path)
         self.delayer = Delayer(self.browser)
+        self.converter = TimeConverter()
         self.url = "https://wizzair.com/en-gb/flights/timetable#/"
         self.browser.get(self.url)
         self.browser.maximize_window()
@@ -71,7 +73,7 @@ class Scraper:
             self.delayer.clickable(By.XPATH, locators.xpath.MONTHS_DROPDOWN)
             select_month = Select(self.browser.find_element_by_xpath(locators.xpath.MONTHS_DROPDOWN))
 
-            # calculate next month which we will scraped
+            # calculate next month which we will scrape
             if whole_year:
                 selected_month = self.current_date.month + month_num
             else:
@@ -86,28 +88,33 @@ class Scraper:
             self.delayer.presence(By.CLASS_NAME, "fare-finder__calendar__days__list")
             two_ways_prices = self.browser.find_elements_by_class_name("fare-finder__calendar__days__list")
 
-            first_way = two_ways_prices[0]
-            options = first_way.find_elements_by_tag_name("li")
             time.sleep(15)
+
+            first_way = two_ways_prices[0]
+            return_way = two_ways_prices[1]
+            options = first_way.find_elements_by_tag_name("li")
+
             # self.delayer.presence(By.CLASS_NAME, "fare-finder__calendar__days__day__container")
-            for option in options:
-                try:
-                    day = int(option.find_element_by_tag_name("i").text)
-                    p_data = option.find_elements_by_tag_name("p")
-                    info = [data.text for data in p_data]
-                    if "" in info:
-                        info.remove("")
-                    if "BEST PRICE" in info:
-                        info.remove("BEST PRICE")
-                    if info:
-                        if info[0] == "NO FLIGHT":
-                            self.first_way_prices.append((day, None))
-                        else:
-                            value, currency = info[0].split("\n")
-                            self.first_way_prices.append((day, float(value)))
-                except Exception as e:
-                    print(e)
-                    #  here add some log
+            for i, which_way in enumerate([self.first_way_prices, self.return_prices]):
+                options = two_ways_prices[i].find_elements_by_tag_name("li")
+                for option in options:
+                    try:
+                        day = option.find_element_by_tag_name("i").text.zfill(2)
+                        p_data = option.find_elements_by_tag_name("p")
+                        info = [data.text for data in p_data]
+                        if "" in info:
+                            info.remove("")
+                        if "BEST PRICE" in info:
+                            info.remove("BEST PRICE")
+                        if info:
+                            if info[0] == "NO FLIGHT":
+                                which_way.append((selected_value + "-" + day, None))
+                            else:
+                                value, currency = info[0].split("\n")
+                                which_way.append((selected_value + "-" + day, float(value)))
+                    except Exception as e:
+                        print(e)
+                        #  here add some log
         return True
 
     def calculate_average(self, way):
@@ -135,21 +142,18 @@ class Scraper:
 
     def print_calendar(self, way):
         if way == "first":
-            week = []
-            for i, day_info in enumerate(self.first_way_prices):
-                week.append(day_info)
-                if i % 7 == 0:
+            week = [('xxxx-xx-xx', None) for _ in range(7)]
+            for day_info in self.first_way_prices:
+                week_day = self.converter.str_to_date(day_info[0], "short").weekday()
+                week[week_day] = day_info
+                if week_day == 6:
                     print(week)
-                    week = []
-            if week:
-                print(week)
-
-        elif way == "return":
-            week = []
-            for i, day_info in enumerate(self.return_prices):
-                week.append(day_info)
-                if i % 7 == 0:
-                    print(week)
-                    week = []
-            if week:
+            if week[-1] != self.first_way_prices:
+                counter = 0
+                for i in range(6, 0, -1):
+                    counter += 1
+                    if week[i][0] < week[i-1][0]:
+                        break
+                for k in range(counter):
+                    week.pop()
                 print(week)

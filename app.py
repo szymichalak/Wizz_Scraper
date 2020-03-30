@@ -19,6 +19,8 @@ def main(browser_name):
     new_scraper.scrap_prices(origin, destination, whole, first_month, second_month)
     print(new_scraper.calculate_average("first"))
     new_scraper.print_calendar("first")
+    print("\n")
+    new_scraper.print_calendar("return")
     time.sleep(10)
     new_scraper.close_browser()
 
