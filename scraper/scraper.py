@@ -1,5 +1,7 @@
 import time
 import datetime
+import os
+import json
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.select import Select
@@ -90,10 +92,6 @@ class Scraper:
 
             time.sleep(15)
 
-            first_way = two_ways_prices[0]
-            return_way = two_ways_prices[1]
-            options = first_way.find_elements_by_tag_name("li")
-
             # self.delayer.presence(By.CLASS_NAME, "fare-finder__calendar__days__day__container")
             for i, which_way in enumerate([self.first_way_prices, self.return_prices]):
                 options = two_ways_prices[i].find_elements_by_tag_name("li")
@@ -157,3 +155,46 @@ class Scraper:
                 for k in range(counter):
                     week.pop()
                 print(week)
+
+    def scrap_cities(self):
+        # click on input field to open the list of cities
+        self.delayer.clickable(By.ID, "search-departure-station")
+        self.browser.find_element_by_id("search-departure-station").click()
+
+        self.delayer.presence_all(By.CLASS_NAME, "locations-container__group")
+        full_list = self.browser.find_elements_by_class_name("locations-container__group")
+
+        # store data in dictionary and save it into a files
+        data = {}
+        for country in full_list:
+            self.browser.execute_script("arguments[0].scrollIntoView();", country)
+            self.delayer.presence_all(By.CLASS_NAME, "title")
+            country_name = country.find_element_by_class_name("title").text.lower()
+            cities = country.find_elements_by_tag_name("label")
+            cities_list = []
+            for city in cities:
+                city_name = city.find_element_by_tag_name("strong").text
+                city_code = city.find_element_by_tag_name("small").text
+                cities_list.append((city_name, city_code))
+            data[country_name] = cities_list
+
+        # self.close_browser()
+
+        # create a folder
+        countries_path = str(Path().absolute()) + "/countries"
+        if not Path(countries_path).exists():
+            os.mkdir(countries_path, 0o755)
+
+        # create files with available cities
+        for single_country in data:
+            with open(f"{countries_path}/{single_country}.txt", "w") as file:
+                for item in data[single_country]:
+                    file.write("%s\n" % item[0])
+
+        # create a .json file with all airports codes (city: code)
+        dir_to_json = {"updated": self.converter.date_to_str(datetime.date.today(), "short")}
+        for single_country in data:
+            for single_city in data[single_country]:
+                dir_to_json[single_city[0]] = single_city[1]
+        with open(f"{str(Path().absolute())}/extra_data/airport_codes.json", "w") as f:
+            json.dump(dir_to_json, f)
