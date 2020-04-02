@@ -29,46 +29,29 @@ class Scraper:
         self.current_date = datetime.date.today()
 
     def open_browser(self, tabs):
-        # url = "https://wizzair.com/en-gb/flights/timetable#/"
-        # self.browser.get(url)
+        # self.browser.maximize_window()
+        # self.browser.minimize_window()
         for tab_num in range(1, tabs+1):
             url = "https://wizzair.com/en-gb/flights/timetable#/"
             self.browser.get(url)
             if tab_num < tabs:
                 self.browser.execute_script("window.open('about:blank');")
                 self.browser.switch_to.window(self.browser.window_handles[tab_num])
-        self.browser.switch_to.window(self.browser.window_handles[0])
-        self.browser.maximize_window()
-        self.browser.minimize_window()
 
     def close_browser(self):
         self.browser.quit()
 
     def scrap_prices(self, origin, destination, whole_year, start, stop):
-        self.open_browser(1)
+        start_time = time.time()
 
-        # wait for filling
-        self.delayer.clickable(By.ID, id.DEPARTURE_INPUT)
+        need_update = func.need_update()
+        if need_update:
+            self.scrap_cities()
 
-        # set origin
-        departure = self.browser.find_element_by_id(id.DEPARTURE_INPUT)
-        time.sleep(0.5)
-        departure.send_keys(origin)
-        self.delayer.clickable(By.XPATH, xpath.CITY_LABEL)
-        self.browser.find_element_by_xpath(xpath.CITY_LABEL).click()
-
-        # set destination
-        arrival = self.browser.find_element_by_id(id.ARRIVAL_INPUT)
-        arrival.send_keys(destination)
-        self.delayer.clickable(By.XPATH, xpath.CITY_LABEL)
-        self.browser.find_element_by_xpath(xpath.CITY_LABEL).click()
-
-        # click search button
-        self.browser.find_element_by_xpath(xpath.SEARCH_BUTTON).click()
-
-        # calculate number of iterations
+        # calculate number of iterations and tabs
         if whole_year:
             iterations = 12
+            start_month = self.current_date.month
         else:
             try:
                 start_month = int(months.get(start))
@@ -82,16 +65,34 @@ class Scraper:
             else:
                 iterations = stop_month - start_month + 1
 
+        self.open_browser(1)
+
+        # wait for filling (it doesn't work properly)
+        self.delayer.clickable(By.ID, id.DEPARTURE_INPUT)
+        time.sleep(1)
+
+        # set origin
+        departure = self.browser.find_element_by_id(id.DEPARTURE_INPUT)
+        departure.send_keys(origin)
+        self.delayer.clickable(By.XPATH, xpath.CITY_LABEL)
+        self.browser.find_element_by_xpath(xpath.CITY_LABEL).click()
+
+        # set destination
+        arrival = self.browser.find_element_by_id(id.ARRIVAL_INPUT)
+        arrival.send_keys(destination)
+        self.delayer.clickable(By.XPATH, xpath.CITY_LABEL)
+        self.browser.find_element_by_xpath(xpath.CITY_LABEL).click()
+
+        # click search button
+        self.browser.find_element_by_xpath(xpath.SEARCH_BUTTON).click()
+
         for month_num in range(iterations):
             # wait for months dropdown
-            self.delayer.clickable(By.XPATH, xpath.MONTHS_DROPDOWN)
+            self.delayer.clickable(By.CLASS_NAME, class_name.MONTHS_DROPDOWN)
             select_month = Select(self.browser.find_element_by_xpath(xpath.MONTHS_DROPDOWN))
 
             # calculate next month which we will scrape
-            if whole_year:
-                selected_month = self.current_date.month + month_num
-            else:
-                selected_month = start_month + month_num
+            selected_month = start_month + month_num
             selected_year = self.current_date.year
             if selected_month > 12:
                 selected_month -= 12
@@ -99,13 +100,11 @@ class Scraper:
             selected_value = str(selected_year) + "-" + str(selected_month).zfill(2)
             select_month.select_by_value(selected_value)
 
+            # wait for calendar and prices
             self.delayer.presence(By.CLASS_NAME, class_name.CALENDAR)
             two_ways_prices = self.browser.find_elements_by_class_name(class_name.CALENDAR)
+            self.delayer.visibility(By.CLASS_NAME, class_name.PRICE)
 
-            # change it to delayer
-            time.sleep(15)
-
-            # self.delayer.presence(By.CLASS_NAME, "fare-finder__calendar__days__day__container")
             # iterate over calendars and save information
             for i, which_way in enumerate([self.first_way_prices, self.return_prices]):
                 options = two_ways_prices[i].find_elements_by_tag_name("li")
@@ -124,8 +123,9 @@ class Scraper:
                                 which_way.append((selected_value + "-" + day, float(value)))
                     except Exception as e:
                         print(e)
-                        #  here add some log
-        return [True, "All data has been scraped"]
+
+        stop_time = time.time()
+        return [True, f"All data has been scraped within {stop_time - start_time} s"]
 
     def calculate_average(self, way):
         if way == "first":
@@ -146,24 +146,6 @@ class Scraper:
                 sum_prices += day_info[1]
             result.append(sum_prices / len(active))
         return result
-
-    def print_calendar(self, way):
-        if way == "first":
-            week = [('xxxx-xx-xx', None) for _ in range(7)]
-            for day_info in self.first_way_prices:
-                week_day = self.converter.str_to_date(day_info[0], "short").weekday()
-                week[week_day] = day_info
-                if week_day == 6:
-                    print(week)
-            if week[-1] != self.first_way_prices:
-                counter = 0
-                for i in range(6, 0, -1):
-                    counter += 1
-                    if week[i][0] < week[i-1][0]:
-                        break
-                for k in range(counter):
-                    week.pop()
-                print(week)
 
     def scrap_cities(self):
         self.open_browser(1)

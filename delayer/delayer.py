@@ -28,3 +28,10 @@ class Delayer:
                 (type_by, path)
             )
         )
+
+    def visibility(self, type_by, path, timeout=DEFAULT_TIMEOUT):
+        WebDriverWait(self.browser, timeout).until(
+            expected_conditions.visibility_of_all_elements_located(
+                (type_by, path)
+            )
+        )
