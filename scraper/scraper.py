@@ -17,11 +17,21 @@ from time_converter.time_converter import TimeConverter
 class Scraper:
     def __init__(self, browser_name):
         if browser_name == "Firefox":
+            firefox_profile = webdriver.FirefoxProfile()
+            # firefox_profile.set_preference('permissions.default.image', 2)
+            # firefox_profile.set_preference('dom.ipc.plugins.enabled.libflashplayer.so', 'false')
+            firefox_options = webdriver.FirefoxOptions()
+            # firefox_options.headless = True
             driver_path = str(Path().absolute()) + "/scraper/geckodriver"
-            self.browser = webdriver.Firefox(executable_path=driver_path)
+            self.browser = webdriver.Firefox(executable_path=driver_path,
+                                             firefox_profile=firefox_profile, firefox_options=firefox_options)
         elif browser_name == "Chrome":
+            chrome_options = webdriver.ChromeOptions()
+            # prefs = {"profile.managed_default_content_settings.images": 2}
+            # chrome_options.add_experimental_option("prefs", prefs)
+            # chrome_options.headless = True
             driver_path = str(Path().absolute()) + "/scraper/chromedriver"
-            self.browser = webdriver.Chrome(driver_path)
+            self.browser = webdriver.Chrome(driver_path, chrome_options=chrome_options)
         self.delayer = Delayer(self.browser)
         self.converter = TimeConverter()
         self.first_way_prices = []
@@ -43,6 +53,7 @@ class Scraper:
 
     def scrap_prices(self, origin, destination, whole_year, start, stop):
         start_time = time.time()
+        print("start")
 
         need_update = func.need_update()
         if need_update:
@@ -56,7 +67,7 @@ class Scraper:
             try:
                 start_month = int(months.get(start))
                 stop_month = int(months.get(stop))
-            except Exception:
+            except TypeError:
                 return [False, "Wrong months"]
             if start_month == stop_month:
                 iterations = 1
@@ -67,7 +78,7 @@ class Scraper:
 
         self.open_browser(1)
 
-        # wait for filling (it doesn't work properly)
+        # wait for filling (it doesn't work properly so additional sleep is required)
         self.delayer.clickable(By.ID, id.DEPARTURE_INPUT)
         time.sleep(1)
 
@@ -87,9 +98,12 @@ class Scraper:
         self.browser.find_element_by_xpath(xpath.SEARCH_BUTTON).click()
 
         for month_num in range(iterations):
-            # wait for months dropdown
-            self.delayer.clickable(By.CLASS_NAME, class_name.MONTHS_DROPDOWN)
-            select_month = Select(self.browser.find_element_by_xpath(xpath.MONTHS_DROPDOWN))
+            # wait for months dropdown and click it
+            self.delayer.presence_all(By.CLASS_NAME, class_name.MONTHS_DROPDOWN)
+            self.delayer.clickable(By.XPATH, xpath.MONTHS_DROPDOWN_UPPER)
+            self.delayer.clickable(By.XPATH, xpath.MONTHS_DROPDOWN_LOWER)
+            select_month_upper = Select(self.browser.find_element_by_xpath(xpath.MONTHS_DROPDOWN_UPPER))
+            select_month_lower = Select(self.browser.find_element_by_xpath(xpath.MONTHS_DROPDOWN_LOWER))
 
             # calculate next month which we will scrape
             selected_month = start_month + month_num
@@ -98,12 +112,18 @@ class Scraper:
                 selected_month -= 12
                 selected_year += 1
             selected_value = str(selected_year) + "-" + str(selected_month).zfill(2)
-            select_month.select_by_value(selected_value)
+            select_month_upper.select_by_value(selected_value)
+            select_month_lower.select_by_value(selected_value)
 
             # wait for calendar and prices
             self.delayer.presence(By.CLASS_NAME, class_name.CALENDAR)
             two_ways_prices = self.browser.find_elements_by_class_name(class_name.CALENDAR)
-            self.delayer.visibility(By.CLASS_NAME, class_name.PRICE)
+            elements = []
+            load_break = 0
+            while len(elements) < 10 and load_break < 20:
+                elements = self.browser.find_elements_by_class_name(class_name.PRICE)
+                time.sleep(0.5)
+                load_break += 0.5
 
             # iterate over calendars and save information
             for i, which_way in enumerate([self.first_way_prices, self.return_prices]):
@@ -141,10 +161,8 @@ class Scraper:
         for active in active_list:
             if len(active) == 0:
                 return [False, "No scraped information"]
-            sum_prices = 0
-            for day_info in active:
-                sum_prices += day_info[1]
-            result.append(sum_prices / len(active))
+            numpy_array_prices = func.data_to_numpy(active)
+            result.append(numpy_array_prices.mean())
         return result
 
     def scrap_cities(self):

@@ -1,6 +1,7 @@
 import json
 import datetime
 from pathlib import Path
+import numpy as np
 
 from time_converter.time_converter import TimeConverter
 
@@ -29,3 +30,9 @@ def need_update():
         return True
     else:
         return False
+
+
+def data_to_numpy(data_list):
+    for i in range(len(data_list)):
+        data_list[i] = data_list[i][1]
+    return np.asarray(data_list, dtype=np.float32)
