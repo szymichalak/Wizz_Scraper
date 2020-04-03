@@ -6,60 +6,46 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.select import Select
 from pathlib import Path
+import numpy as np
 
 import extra_data.functions as func
 from locators import xpath, class_name, id
 from delayer.delayer import Delayer
 from extra_data.months import months
 from time_converter.time_converter import TimeConverter
+from extra_data.results import first_way, return_way
 
 
 class Scraper:
-    def __init__(self, browser_name):
-        if browser_name == "Firefox":
-            firefox_profile = webdriver.FirefoxProfile()
-            # firefox_profile.set_preference('permissions.default.image', 2)
-            # firefox_profile.set_preference('dom.ipc.plugins.enabled.libflashplayer.so', 'false')
-            firefox_options = webdriver.FirefoxOptions()
-            # firefox_options.headless = True
-            driver_path = str(Path().absolute()) + "/scraper/geckodriver"
-            self.browser = webdriver.Firefox(executable_path=driver_path,
-                                             firefox_profile=firefox_profile, firefox_options=firefox_options)
-        elif browser_name == "Chrome":
-            chrome_options = webdriver.ChromeOptions()
-            # prefs = {"profile.managed_default_content_settings.images": 2}
-            # chrome_options.add_experimental_option("prefs", prefs)
-            # chrome_options.headless = True
-            driver_path = str(Path().absolute()) + "/scraper/chromedriver"
-            self.browser = webdriver.Chrome(driver_path, chrome_options=chrome_options)
+    def __init__(self):
+        chrome_options = webdriver.ChromeOptions()
+        prefs = {"profile.managed_default_content_settings.images": 2}
+        chrome_options.add_experimental_option("prefs", prefs)
+        # chrome_options.headless = True
+        driver_path = str(Path().absolute()) + "/scraper/chromedriver"
+        self.browser = webdriver.Chrome(driver_path, chrome_options=chrome_options)
         self.delayer = Delayer(self.browser)
         self.converter = TimeConverter()
         self.first_way_prices = []
         self.return_prices = []
         self.current_date = datetime.date.today()
 
-    def open_browser(self, tabs):
-        # self.browser.maximize_window()
-        # self.browser.minimize_window()
-        for tab_num in range(1, tabs+1):
-            url = "https://wizzair.com/en-gb/flights/timetable#/"
-            self.browser.get(url)
-            if tab_num < tabs:
-                self.browser.execute_script("window.open('about:blank');")
-                self.browser.switch_to.window(self.browser.window_handles[tab_num])
+    def open_browser(self):
+        url = "https://wizzair.com/en-gb/flights/timetable#/"
+        self.browser.get(url)
+        self.browser.maximize_window()
 
     def close_browser(self):
         self.browser.quit()
 
     def scrap_prices(self, origin, destination, whole_year, start, stop):
         start_time = time.time()
-        print("start")
 
         need_update = func.need_update()
         if need_update:
             self.scrap_cities()
 
-        # calculate number of iterations and tabs
+        # calculate number of iterations
         if whole_year:
             iterations = 12
             start_month = self.current_date.month
@@ -76,7 +62,7 @@ class Scraper:
             else:
                 iterations = stop_month - start_month + 1
 
-        self.open_browser(1)
+        self.open_browser()
 
         # wait for filling (it doesn't work properly so additional sleep is required)
         self.delayer.clickable(By.ID, id.DEPARTURE_INPUT)
@@ -144,16 +130,19 @@ class Scraper:
                     except Exception as e:
                         print(e)
 
+        self.close_browser()
         stop_time = time.time()
         return [True, f"All data has been scraped within {stop_time - start_time} s"]
 
     def calculate_average(self, way):
+        first_copy = self.first_way_prices.copy()
+        return_copy = self.return_prices.copy()
         if way == "first":
-            active_list = [self.first_way_prices]
+            active_list = [first_copy]
         elif way == "return":
-            active_list = [self.return_prices]
+            active_list = [return_copy]
         elif way == "both":
-            active_list = [self.first_way_prices, self.return_prices]
+            active_list = [first_copy, return_copy]
         else:
             return [False, "Wrong way, select: first, return or both"]
 
@@ -166,7 +155,7 @@ class Scraper:
         return result
 
     def scrap_cities(self):
-        self.open_browser(1)
+        self.open_browser()
 
         # click on input field to open the list of cities
         self.delayer.clickable(By.ID, id.DEPARTURE_INPUT)
@@ -209,3 +198,86 @@ class Scraper:
                 dir_to_json[single_city[0]] = single_city[1]
         with open(f"{str(Path().absolute())}/extra_data/airport_codes.json", "w") as f:
             json.dump(dir_to_json, f)
+
+    def split_to_months(self, way):
+        first_copy = self.first_way_prices.copy()
+        return_copy = self.return_prices.copy()
+        if way == "first":
+            active_list = [first_copy]
+        elif way == "return":
+            active_list = [return_copy]
+        elif way == "both":
+            active_list = [first_copy, return_copy]
+        else:
+            return [False, "Wrong way, select: first, return or both"]
+
+        result = []
+        for active in active_list:
+            year = []
+            current = active[0][0][5:7]
+            month = []
+            for data in active:
+                if data[0][5:7] != current:
+                    year.append(month)
+                    current = data[0][5:7]
+                    month = [data]
+                else:
+                    month.append(data)
+            result.append(year)
+        return result
+
+    def get_max_min_id(self, way, max_or_min):
+        first_copy = self.first_way_prices.copy()
+        return_copy = self.return_prices.copy()
+        if way == "first":
+            active_list = [first_copy]
+        elif way == "return":
+            active_list = [return_copy]
+        elif way == "both":
+            active_list = [first_copy, return_copy]
+        else:
+            return [False, "Wrong way, select: first, return or both"]
+
+        result = []
+        for active in active_list:
+            if len(active) == 0:
+                return [False, "No scraped information"]
+            numpy_array_prices = func.data_to_numpy(active)
+            if max_or_min == "max":
+                items_id = np.where(numpy_array_prices == numpy_array_prices.max())
+            elif max_or_min == "min":
+                items_id = np.where(numpy_array_prices == numpy_array_prices.min())
+            else:
+                return [False, "Bad argument, take max or min "]
+            result.append(items_id[0])
+        return result
+
+    def get_max_min_val(self, way, max_or_min):
+        first_copy = self.first_way_prices.copy()
+        return_copy = self.return_prices.copy()
+        if way == "first":
+            active_list = [first_copy]
+        elif way == "return":
+            active_list = [return_copy]
+        elif way == "both":
+            active_list = [first_copy, return_copy]
+        else:
+            return [False, "Wrong way, select: first, return or both"]
+
+        result = []
+        for active in active_list:
+            if len(active) == 0:
+                return [False, "No scraped information"]
+            numpy_array_prices = func.data_to_numpy(active)
+            if max_or_min == "max":
+                value = numpy_array_prices.max()
+            elif max_or_min == "min":
+                value = numpy_array_prices.min()
+            else:
+                return [False, "Bad argument, take max or min "]
+            result.append(value)
+        return result
+
+    def load_example(self):
+        self.first_way_prices = first_way
+        self.return_prices = return_way

@@ -1,11 +1,11 @@
 import time
 from scraper.scraper import Scraper
-from results import first_way, return_way
+from extra_data.results import first_way, return_way
 import extra_data.functions as func
 import numpy as np
 
 
-def main(browser_name):
+def main():
     # origin = "Vienna"  # input("Enter city of departure: ")
     # destination = "Tuzla"  # input("Enter city of arrival: ")
     # while True:
@@ -20,25 +20,17 @@ def main(browser_name):
     #         second_month = None
     #         whole = True
     #         break
-    #
-    # new_scraper = Scraper(browser_name)
-    # print(new_scraper.scrap_prices(origin, destination, whole, first_month, second_month))
-    # print("average = ", new_scraper.calculate_average("both"))
-    # print(new_scraper.first_way_prices)
-    # print(new_scraper.return_prices)
-    # new_scraper.close_browser()
 
-    x = func.data_to_numpy(first_way)
-    print(x.max())
-    print((x.min()))
-    print((x.mean()))
-    print(x.sum()/len(x))
-    itemindex = np.where(x == x.min())
-    print(itemindex)
-    print(len(x))
+    new_scraper = Scraper()
+    new_scraper.load_example()
+    print("average = ", new_scraper.calculate_average("both"))
+    print("max_val = ", new_scraper.get_max_min_val("both", "max"))
+    print("min_val = ", new_scraper.get_max_min_val("both", "min"))
+    print("max_id = ", new_scraper.get_max_min_id("both", "max"))
+    print("min_id = ", new_scraper.get_max_min_id("both", "min"))
+
 
 
 
 if __name__ == "__main__":
-    your_browser = "Chrome"  # input("What browser do you have (Chrome / Firefox)? ")
-    main(your_browser)
+    main()
