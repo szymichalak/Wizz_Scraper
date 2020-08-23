@@ -41,9 +41,17 @@ class Scraper:
     def scrap_prices(self, origin, destination, whole_year, start, stop):
         start_time = time.time()
 
-        need_update = func.need_update()
-        if need_update:
-            self.scrap_cities()
+        check_cities = func.check_airports(origin, destination)
+        if not check_cities:
+            return [False, "Bad cities, try again"]
+
+        # need_update = func.need_update()
+        # if need_update:
+        #     self.scrap_cities()
+
+
+
+
 
         # calculate number of iterations
         if whole_year:
@@ -223,6 +231,7 @@ class Scraper:
                     month = [data]
                 else:
                     month.append(data)
+            year.append(month)
             result.append(year)
         return result
 

@@ -36,3 +36,27 @@ def data_to_numpy(data_list):
     for i in range(len(data_list)):
         data_list[i] = data_list[i][1]
     return np.asarray(data_list, dtype=np.float32)
+
+
+def split_data(data_list):
+    dates = []
+    prices = []
+    for info in data_list:
+        dates.append(info[0])
+        prices.append(info[1])
+    return dates, prices
+
+
+def split_to_months(year_data):
+    year = []
+    current = year_data[0][5:7]
+    month = []
+    for data in year_data:
+        if data[0][5:7] != current:
+            year.append(month)
+            current = data[0][5:7]
+            month = [data]
+        else:
+            month.append(data)
+    year.append(month)
+    return year

@@ -1,7 +1,7 @@
 from selenium.webdriver.support import expected_conditions
 from selenium.webdriver.support.ui import WebDriverWait
 
-DEFAULT_TIMEOUT = 30
+DEFAULT_TIMEOUT = 100
 
 
 class Delayer:
