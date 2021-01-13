@@ -3,6 +3,8 @@ import datetime
 import os
 import json
 from selenium import webdriver
+from seleniumrequests import Chrome
+# from seleniumwire import webdriver  # Import from seleniumwire
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.select import Select
 from pathlib import Path
@@ -36,6 +38,7 @@ class Scraper:
         self.browser.maximize_window()
 
     def close_browser(self):
+        time.sleep(10)
         self.browser.quit()
 
     def scrap_prices(self, origin, destination, whole_year, start, stop):
@@ -118,6 +121,19 @@ class Scraper:
                 elements = self.browser.find_elements_by_class_name(class_name.PRICE)
                 time.sleep(0.5)
                 load_break += 0.5
+
+            # print(self.browser.get_cookies())
+            # request = self.browser.requests[2]
+            # print(request.method)
+            # print(request.url)
+            # print(request.path)
+            # print(request.querystring)
+            # print(request.params)
+            # print(request.headers)
+            # print(request.body)
+            # print(request.response)
+
+
 
             # iterate over calendars and save information
             for i, which_way in enumerate([self.first_way_prices, self.return_prices]):
