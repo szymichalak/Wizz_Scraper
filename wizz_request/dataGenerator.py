@@ -1,45 +1,70 @@
+import copy
 from typing import List
-import datetime
-from dateutil.relativedelta import *
+from datetime import datetime, timedelta
 
-from models.flightSearch import FlightSearch
 from models.postData import PostData
 
 
+def last_day_of_next_month(date: datetime):
+    year = date.year
+    month = date.month
+    if month + 1 > 12:
+        year += 1
+        month -= 11
+        new_date = datetime(year, month + 1, 1)
+    elif month + 2 > 12:
+        year += 1
+        month -= 11
+        new_date = datetime(year, month + 1, 1)
+    else:
+        new_date = datetime(year, month + 2, 1)
+    return new_date - timedelta(days=1)
+
+
 class DataGenerator:
-    def __init__(self, adult: int):
-        self.data: List[PostData] = []
-        self.adult = adult
+    def __init__(self, input_data: PostData):
+        self.__input_data = input_data
+        self.__data: List[PostData] = []
+        self.__format = '%Y-%m-%d'
+        self.__start_date: datetime
+        self.__end_date: datetime
+        self.__months: int
+        if len(self.__input_data.flightList) > 0:
+            self.__start_date = datetime.strptime(self.__input_data.flightList[0].from_date, self.__format)
+            self.__end_date = datetime.strptime(self.__input_data.flightList[0].to_date, self.__format)
 
-    def generate(self, source: str, destination: str, first_month: int, last_month: int, start_year: int, generate_return=True):
-        if first_month > last_month:
-            last_month += 12
+            if self.__start_date.year == self.__end_date.year and self.__start_date.month == self.__end_date.month:
+                self.__months = 1
+            else:
+                self.__months = (self.__end_date.year - self.__start_date.year) * 12 + \
+                              (self.__end_date.month - self.__start_date.month) + 1
 
-        if first_month <= last_month:
-            for i in range(last_month-first_month+1):
-                if first_month + i > 12:
-                    start_year += 1
-                    first_month -= 12
-                    last_month -= 12
+    def generate(self):
+        self.clear()
 
-                post_data = PostData()
-                start_date = datetime.datetime(start_year, first_month+i, 1)
-                finish_date = start_date + relativedelta(months=+1) - datetime.timedelta(days=1)
-                flight_search = FlightSearch(source, destination,
-                                             start_date.strftime('%Y-%m-%d'), finish_date.strftime('%Y-%m-%d'))
-                flight_search.departureStation = source
-                flight_search.arrivalStation = destination
+        if self.__months == 1:
+            self.__data.append(self.__input_data)
+        else:
+            first = copy.deepcopy(self.__input_data)
+            for flight in first.flightList:
+                flight.from_date = datetime(self.__start_date.year, self.__start_date.month, self.__start_date.day)
+                flight.to_date = datetime(self.__start_date.year, self.__start_date.month + 1, 1) - timedelta(days=1)
+            self.__data.append(first)
 
-                flightList = [flight_search]
-                if generate_return:
-                    flight_search = FlightSearch(destination, source,
-                                                 start_date.strftime('%Y-%m-%d'), finish_date.strftime('%Y-%m-%d'))
-                    flightList.append(flight_search)
-                post_data.flightList = flightList
-                post_data.adultCount = self.adult
-                self.data.append(post_data)
+            next_month = copy.deepcopy(first)
+            for i in range(self.__months - 2):
+                for j, flight in enumerate(next_month.flightList):
+                    flight.from_date = next_month.flightList[j].to_date + timedelta(days=1)
+                    flight.to_date = last_day_of_next_month(next_month.flightList[j].to_date)
+                self.__data.append(copy.deepcopy(next_month))
+                next_month = copy.deepcopy(next_month)
 
-        return self.data
+            last_month = copy.deepcopy(next_month)
+            for i, flight in enumerate(last_month.flightList):
+                flight.from_date = last_month.flightList[i].to_date + timedelta(days=1)
+                flight.to_date = self.__end_date
+            self.__data.append(copy.deepcopy(last_month))
+        return self.__data
 
     def clear(self):
-        self.data = []
+        self.__data = []

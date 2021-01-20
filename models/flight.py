@@ -10,6 +10,7 @@ class Flight:
             if key == 'price':
                 self.priceValue = value['amount']
                 self.priceCurrency = value['currencyCode']
+                continue
             if hasattr(self, key):
                 if key == 'departureDate':
                     value = value.split('T')[0]
